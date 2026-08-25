@@ -11,24 +11,54 @@ Sem login: **o código da sala é a chave**. Quem tem o código pode registrar.
 
 - **Next.js 16** (App Router, Server Actions, Turbopack) + React 19 + TypeScript
 - **Tailwind CSS v4** — tema escuro único, mobile-first
-- **Neon Postgres** + **Drizzle ORM** (driver HTTP `@neondatabase/serverless`)
+- **Postgres** + **Drizzle ORM** com o driver TCP genérico (`pg`)
 - PWA instalável (`manifest.ts` + service worker mínimo)
+
+O driver é o `pg` comum, não o driver HTTP do Neon, então **o mesmo código fala
+com o Postgres do `docker-compose` no local e com qualquer Postgres hospedado em
+produção**. No Fluid Compute da Vercel a função fica quente o suficiente para
+reaproveitar a conexão TCP entre requests.
 
 ## Rodando local
 
-Você precisa de uma `DATABASE_URL` apontando para um Postgres do Neon — o
-driver HTTP do Neon não fala com um Postgres comum, então não dá para usar um
-container local sem proxy. O caminho curto é criar o banco na Vercel (ver
-[Deploy](#deploy)) e puxar as variáveis:
+O driver é o `pg` comum, então qualquer Postgres serve. Dois caminhos:
+
+### Opção A — Postgres em Docker (recomendado)
 
 ```bash
 npm install
-npx vercel env pull .env.local   # ou copie .env.example e cole a string do Neon
-npm run db:push                  # cria as tabelas
+docker compose up -d      # Postgres 18 em localhost:5433
+cp .env.example .env.local
+npm run db:push           # cria as 3 tabelas
 npm run dev
 ```
 
-Abra <http://localhost:3000>.
+A porta do host é **5433**, não 5432, para não colidir com os outros projetos
+desta máquina que também sobem Postgres.
+
+Para zerar o banco: `docker compose down -v && docker compose up -d && npm run db:push`.
+
+### Opção B — direto no Neon de produção
+
+```bash
+npm install
+npx vercel env pull .env.local
+npm run dev
+```
+
+Menos um serviço rodando, mas **você passa a desenvolver contra o banco real**:
+
+- Salas de teste ficam misturadas com as de verdade.
+- A cota de compute do free tier é a mesma (100 CU-hours/mês no total), e o
+  `npm run dev` com o poller de 5s mantém o compute acordado a sessão inteira —
+  ou seja, desenvolver consome as horas que a produção também precisa.
+- Um `db:push` distraído mexe no schema de produção.
+
+Se quiser isolamento sem Docker, crie um branch `dev` no Neon (o free tier
+permite 10) e use a connection string dele — os branches dividem a mesma cota de
+compute, mas os dados ficam separados.
+
+Nos dois casos, abra <http://localhost:3000>.
 
 ## Scripts
 
@@ -36,28 +66,46 @@ Abra <http://localhost:3000>.
 |---|---|
 | `npm run dev` | Servidor de desenvolvimento |
 | `npm run build` | Build de produção |
+| `npm test` | Testes da lógica pura (quites, código, fuso, validação) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
-| `npm run db:push` | Aplica o schema no banco |
+| `npm run db:push` | Aplica o schema usando o `.env.local` |
+| `npm run db:push:remote` | Aplica o schema na URL passada inline (produção) |
 | `npm run db:studio` | Drizzle Studio |
 | `npm run icons` | Regera os PNGs do PWA a partir de `public/icon.svg` |
 
 Os scripts de banco passam por `node --env-file-if-exists=.env.local` porque o
-`drizzle-kit` **não** carrega `.env.local` sozinho.
+`drizzle-kit` **não** carrega `.env.local` sozinho. O `db:push:remote` é a
+exceção deliberada: sem env-file, para que a `DATABASE_URL` passada inline não
+corra o risco de ser sobrescrita pela do Docker.
 
 ## Deploy
 
-1. `git push` para o GitHub.
-2. Em [vercel.com](https://vercel.com) → *Add New Project* → importe o repo.
-   Next.js é detectado sozinho, sem configuração.
-3. Aba **Storage** → *Marketplace* → **Neon** → criar o banco. As variáveis
-   (`DATABASE_URL` entre elas) são injetadas em todos os ambientes
-   automaticamente e a cobrança sai pela própria Vercel.
-4. Aplique o schema uma vez: `npx vercel env pull .env.local && npm run db:push`.
-5. Redeploy.
+O app está na Vercel e o Postgres é um **Neon Free** criado pelo Marketplace da
+Vercel, vinculado ao projeto. Isso significa que as variáveis de ambiente
+(`DATABASE_URL` entre elas) são **injetadas automaticamente** em todos os
+ambientes — não há nada para preencher à mão.
+
+Deploy é `git push`: a Vercel builda sozinha, sem configuração.
+
+Só o schema precisa ser aplicado à mão, uma vez (e de novo quando o schema
+mudar). Use a connection string **direct/unpooled** — o pooler em modo
+transaction quebra DDL:
+
+```bash
+npx vercel link                       # uma vez, para associar a pasta ao projeto
+npx vercel env pull .env.vercel       # traz as variáveis do Neon
+# use a variável unpooled (normalmente DATABASE_URL_UNPOOLED):
+DATABASE_URL="<unpooled>" npm run db:push:remote
+```
 
 `db:push` fica **fora** do build de propósito: rodar migração de schema em cada
 deploy é risco sem ganho num projeto deste tamanho.
+
+### Custo
+
+R$ 0. O Hobby da Vercel é gratuito sem cartão, e o plano Free do Neon **não
+fatura excedente** — ao bater o limite ele suspende o compute, não cobra.
 
 ## Como funciona
 
@@ -82,13 +130,24 @@ mão registra pelo grupo.
 ### Atualização entre amigos
 
 Polling de 5s via `router.refresh()` (`src/components/RoomPoller.tsx`), pausado
-quando a aba está oculta. Não é realtime de propósito: 5s é imperceptível para
-este uso e não exige nenhum serviço extra.
+com a aba oculta e **encerrado após 15 min sem interação**. Esse limite não é
+capricho: sem ele, uma aba de desktop esquecida aberta manteria o compute do
+Postgres acordado 24h/dia e queimaria as 400h/mês do free tier em ~17 dias,
+suspendendo o banco para todo mundo. Retoma no primeiro toque ou quando a aba
+volta ao foco.
 
 As mutações usam `refresh()` de `next/cache` (novo no Next 16) em vez de
 `revalidatePath`: a página da sala é dinâmica porque lê cookies, então não
 existe cache de rota para invalidar — o que se quer é atualizar o router do
 cliente.
+
+### SSL do banco
+
+`src/db/index.ts` **não** passa opção `ssl`, de propósito: no `pg`, um `sslmode`
+presente na connection string sobrescreve silenciosamente qualquer objeto `ssl`
+passado no config. Deixar a string mandar faz os dois ambientes funcionarem sem
+condicional — a do Neon vem com `sslmode=require`, a do Docker local não traz
+nenhum.
 
 ### Service worker
 

@@ -19,10 +19,9 @@ export function CreateRoomForm() {
           name="roomName"
           required
           maxLength={ROOM_NAME_MAX}
-          placeholder="Compra de energético"
           autoComplete="off"
           className="min-h-12 rounded-xl bg-ink border border-line px-4 text-base
-                     outline-none focus:border-accent placeholder:text-muted/50"
+                     outline-none focus:border-accent"
         />
       </label>
 
@@ -32,10 +31,9 @@ export function CreateRoomForm() {
           name="personName"
           required
           maxLength={PERSON_NAME_MAX}
-          placeholder="Davi"
           autoComplete="given-name"
           className="min-h-12 rounded-xl bg-ink border border-line px-4 text-base
-                     outline-none focus:border-accent placeholder:text-muted/50"
+                     outline-none focus:border-accent"
         />
       </label>
 

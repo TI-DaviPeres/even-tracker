@@ -14,19 +14,17 @@ export function EnterRoomForm() {
   return (
     <form action={action} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm text-muted">Código da sala</span>
+        <span className="text-sm text-muted">Código da sala (6 caracteres)</span>
         <input
           name="code"
           required
           maxLength={CODE_LENGTH}
-          placeholder="A7K2QP"
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
           className="min-h-12 rounded-xl bg-ink border border-line px-4
                      font-mono text-xl tracking-[0.3em] uppercase
-                     outline-none focus:border-accent placeholder:text-muted/40
-                     placeholder:tracking-[0.3em]"
+                     outline-none focus:border-accent"
         />
       </label>
 

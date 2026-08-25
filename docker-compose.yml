@@ -1,0 +1,29 @@
+# Postgres de desenvolvimento. Descartável: derrube com `docker compose down -v`
+# quando quiser começar do zero.
+#
+# A porta do host é 5433, não 5432, porque os outros projetos desta máquina
+# (urbion-*, f8-support) também sobem Postgres e colidiriam.
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: quites-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quites
+      POSTGRES_PASSWORD: quites
+      POSTGRES_DB: quites
+    ports:
+      - "5433:5432"
+    volumes:
+      # Mount em /var/lib/postgresql (não .../data): a partir do Postgres 18 a
+      # imagem guarda os dados num subdiretório por versão maior, e um mount
+      # direto em .../data faz o container entrar em crash-loop.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quites -d quites"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
