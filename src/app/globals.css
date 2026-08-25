@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/*
+ * Tema escuro único e deliberado: o app é usado no celular, à noite, no bar.
+ * Não há modo claro para alternar.
+ */
+@theme {
+  --color-ink: #070a0e;
+  --color-canvas: #0b1017;
+  --color-surface: #141b25;
+  --color-surface-hi: #1c2531;
+  --color-line: #26313f;
+  --color-text: #e9eef5;
+  --color-muted: #8b9aad;
+  --color-accent: #a3e635;
+  --color-accent-ink: #14200a;
+  --color-warn: #fbbf24;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+  /* Evita zoom involuntário e o "pull to refresh" atrapalhando o toque no +1. */
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: contain;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  /* Respeita o notch/barra inferior quando instalado como PWA. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Alvos de toque: nada abaixo de 44px em nada que se aperte. */
+button,
+a,
+input {
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
