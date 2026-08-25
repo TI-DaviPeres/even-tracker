@@ -18,11 +18,18 @@ let cached: NodePgDatabase<typeof schema> | undefined;
 export function getDb(): NodePgDatabase<typeof schema> {
   if (cached) return cached;
 
-  const connectionString = process.env.DATABASE_URL ?? "";
+  const raw = process.env.DATABASE_URL;
+  const connectionString = raw?.trim() ?? "";
 
   if (!connectionString) {
+    // Distinguir "não existe" de "existe vazia" importa: a segunda acontece
+    // quando a integração do Neon na Vercel encontra o nome DATABASE_URL já
+    // ocupado e prefixa as variáveis dela (virando DATABASE_URL_DATABASE_URL),
+    // deixando a original no ar mas sem valor.
     throw new Error(
-      "DATABASE_URL não definida. Suba o banco local com `docker compose up -d` e copie .env.example para .env.local.",
+      raw === undefined
+        ? "DATABASE_URL não existe neste ambiente. Local: `docker compose up -d` e copie .env.example para .env.local. Na Vercel: Settings → Environment Variables."
+        : "DATABASE_URL existe mas está vazia. Na Vercel, confira se o valor foi salvo de fato — se a integração do Neon prefixou as variáveis dela (ex.: DATABASE_URL_DATABASE_URL), a connection string está lá e não aqui.",
     );
   }
 
