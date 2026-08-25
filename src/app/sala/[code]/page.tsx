@@ -16,8 +16,13 @@ import { getIdentity } from "@/lib/identity";
 export async function generateMetadata({
   params,
 }: PageProps<"/sala/[code]">): Promise<Metadata> {
-  const { code } = await params;
-  const room = await getRoomByCode(normalizeRoomCode(code));
+  const code = normalizeRoomCode((await params).code);
+
+  // Valida antes de consultar: sem isto, qualquer URL com lixo no lugar do
+  // código gera uma query garantidamente infrutífera.
+  if (!isValidRoomCode(code)) return { title: "Sala não encontrada" };
+
+  const room = await getRoomByCode(code);
   return { title: room ? `${room.name} — Quites` : "Sala não encontrada" };
 }
 
